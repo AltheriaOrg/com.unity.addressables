@@ -6,6 +6,8 @@ This variant forked from the original Addressables-project adds support for buil
 
 This package currently tracks version `1.21.19` of the vanilla Addressables packages. Checkout a `multi-catalog` tag if you require a specific version.
 
+**Altheria Fork**: Due to our need to make multiple content builds for individual clients in a more efficient way, this fork has tweaked the MultiCatalog buildscript (and some other scripts) to allow for  overlapping asset groups to be included in multiple external catalogs. In other words: an environment or assetpack can be given to multiple clients.
+
 ## Notes before you begin
 
 1. This multi-catalog version of Addressables **does not support catalog and group updates** for subsequent builds! If your project requires content to be updated regularly and downloaded by your users without a new player build, then this package will not work for you. If you do require it, please consider implementing this feature in a fork from this repository.
