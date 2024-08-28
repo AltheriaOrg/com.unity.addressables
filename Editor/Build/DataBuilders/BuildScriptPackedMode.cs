@@ -455,7 +455,8 @@ namespace UnityEditor.AddressableAssets.Build.DataBuilders
                     }
 
 
-                    contentCatalog.SetData(catalogInfo.Locations.OrderBy(f => f.InternalId).ToList());
+                    // PRCCO-539: clone entries so locations shared across overlapping catalogs aren't mutated/lost during processing.
+                    contentCatalog.SetData(catalogInfo.Locations.Select(entry => entry.Clone()).OrderBy(f => f.InternalId).ToList());
                     contentCatalog.ResourceProviderData.AddRange(resourceProviderData);
                     contentCatalog.InstanceProviderData = instanceProviderData;
                     contentCatalog.SceneProviderData = sceneProviderData;
@@ -499,7 +500,8 @@ namespace UnityEditor.AddressableAssets.Build.DataBuilders
                         contentCatalog.BuildResultHash = buildResultHash;
                     }
 
-                    contentCatalog.SetData(catalogInfo.Locations.OrderBy(f => f.InternalId).ToList());
+                    // PRCCO-539: clone entries so locations shared across overlapping catalogs aren't mutated/lost during processing.
+                    contentCatalog.SetData(catalogInfo.Locations.Select(entry => entry.Clone()).OrderBy(f => f.InternalId).ToList());
                     contentCatalog.ResourceProviderData.AddRange(resourceProviderData);
                     contentCatalog.InstanceProviderData = instanceProviderData;
                     contentCatalog.SceneProviderData = sceneProviderData;

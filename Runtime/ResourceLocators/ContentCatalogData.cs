@@ -65,6 +65,39 @@ namespace UnityEngine.AddressableAssets.ResourceLocators
             Dependencies = dependencies == null ? new List<object>() : new List<object>(dependencies);
             Data = extraData;
         }
+
+        // Clone method to create a deep copy of ContentCatalogDataEntry
+        public ContentCatalogDataEntry Clone()
+        {
+            // Since Keys and Dependencies are usually strings, we can simply create new lists with the same elements.
+            var clonedKeys = new List<object>(Keys);
+            var clonedDependencies = new List<object>(Dependencies);
+
+            // Clone the Data object if needed
+            var clonedData = Data != null ? CloneObject(Data) : null;
+
+            return new ContentCatalogDataEntry(
+                ResourceType,
+                InternalId,
+                Provider,
+                clonedKeys,
+                clonedDependencies,
+                clonedData
+            );
+        }
+
+        // Helper method to clone objects
+        private object CloneObject(object obj)
+        {
+            if (obj == null)
+                return null;
+
+            if (obj is ICloneable cloneable)
+                return cloneable.Clone();
+
+            // If the object is not cloneable, return the same reference (this could be adjusted depending on use case)
+            return obj;
+        }
     }
 
     /// <summary>
