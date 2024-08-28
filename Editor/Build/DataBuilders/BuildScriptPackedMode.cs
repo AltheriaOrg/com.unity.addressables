@@ -394,43 +394,45 @@ namespace UnityEditor.AddressableAssets.Build.DataBuilders
 
             var contentCatalogs = new List<ContentCatalogData>();
 #if ENABLE_BINARY_CATALOG
-            using (m_Log.ScopedStep(LogLevel.Info, "Generate Binary Catalog"))
+    using (m_Log.ScopedStep(LogLevel.Info, "Generate Binary Catalog"))
+    {
+        foreach (var catalogInfo in GetContentCatalogs(builderInput, aaContext))
+        {
+            var contentCatalog = new ContentCatalogData(ResourceManagerRuntimeData.kCatalogAddress);
+            contentCatalogs.Add(contentCatalog);
+
+            if (addrResult != null)
             {
-                foreach(var catalogInfo in GetContentCatalogs(builderInput, aaContext))
+                List<object> hashingObjects = new List<object>(addrResult.AssetBundleBuildResults.Count);
+                for (int i = 0; i < addrResult.AssetBundleBuildResults.Count; ++i)
                 {
-                    var contentCatalog = new ContentCatalogData(ResourceManagerRuntimeData.kCatalogAddress);
-                    contentCatalogs.Add(contentCatalog);
-
-                    if (addrResult != null)
+                    var hashingObject = addrResult.AssetBundleBuildResults[i];
+                    if (catalogInfo.Locations.Exists(l => (l.ResourceType == typeof(IAssetBundleResource)) && l.InternalId.Equals(hashingObject.FilePath)))
                     {
-                        List<object> hashingObjects = new List<object>(addrResult.AssetBundleBuildResults.Count);
-                        for (int i = 0; i < addrResult.AssetBundleBuildResults.Count; ++i)
-                        {
-                            var hashingObject = addrResult.AssetBundleBuildResults[i];
-                            if (catalogInfo.Locations.Exists(l => (l.ResourceType == typeof(IAssetBundleResource)) && l.InternalId.Equals(hashingObject.FilePath)))
-                            {
-                                hashingObjects.Add(addrResult.AssetBundleBuildResults[i].Hash);
-                            }
-                        }
-
-                        string buildResultHash = HashingMethods.Calculate(hashingObjects.ToArray()).ToString();
-                        contentCatalog.m_BuildResultHash = buildResultHash;
+                        hashingObjects.Add(addrResult.AssetBundleBuildResults[i].Hash);
                     }
-
-                    contentCatalog.SetData(catalogInfo.Locations.OrderBy(f => f.InternalId).ToList());
-                    contentCatalog.ResourceProviderData.AddRange(resourceProviderData);
-                    contentCatalog.InstanceProviderData = instanceProviderData;
-                    contentCatalog.SceneProviderData = sceneProviderData;
-
-                    var bytes = contentCatalog.SerializeToByteArray();
-                    var contentHash = HashingMethods.Calculate(bytes).ToString();
-
-                    if (aaContext.Settings.BuildRemoteCatalog || ProjectConfigData.GenerateBuildLayout)
-                        contentCatalog.localHash = contentHash;
-
-                    CreateCatalogFiles(bytes, builderInput, aaContext, contentHash, catalogInfo);
                 }
+
+                string buildResultHash = HashingMethods.Calculate(hashingObjects.ToArray()).ToString();
+                contentCatalog.m_BuildResultHash = buildResultHash;
             }
+
+            // Clone catalog data entries before processing
+            var clonedLocations = catalogInfo.Locations.Select(entry => entry.Clone()).ToList();
+            contentCatalog.SetData(clonedLocations);
+            contentCatalog.ResourceProviderData.AddRange(resourceProviderData);
+            contentCatalog.InstanceProviderData = instanceProviderData;
+            contentCatalog.SceneProviderData = sceneProviderData;
+
+            var bytes = contentCatalog.SerializeToByteArray();
+            var contentHash = HashingMethods.Calculate(bytes).ToString();
+
+            if (aaContext.Settings.BuildRemoteCatalog || ProjectConfigData.GenerateBuildLayout)
+                contentCatalog.localHash = contentHash;
+
+            CreateCatalogFiles(bytes, builderInput, aaContext, contentHash, catalogInfo);
+        }
+    }
 #else
             using (m_Log.ScopedStep(LogLevel.Info, "Generate JSON Catalog"))
             {
@@ -455,8 +457,9 @@ namespace UnityEditor.AddressableAssets.Build.DataBuilders
                         contentCatalog.m_BuildResultHash = buildResultHash;
                     }
 
-
-                    contentCatalog.SetData(catalogInfo.Locations.OrderBy(f => f.InternalId).ToList());
+                    // Clone catalog data entries before processing
+                    var clonedLocations = catalogInfo.Locations.Select(entry => entry.Clone()).ToList();
+                    contentCatalog.SetData(clonedLocations);
                     contentCatalog.ResourceProviderData.AddRange(resourceProviderData);
                     contentCatalog.InstanceProviderData = instanceProviderData;
                     contentCatalog.SceneProviderData = sceneProviderData;
@@ -857,17 +860,17 @@ namespace UnityEditor.AddressableAssets.Build.DataBuilders
 
             if (buildInfo?.Register ?? true)
             {
-				ResourceLocationData localCatalog = new ResourceLocationData(
+                ResourceLocationData localCatalog = new ResourceLocationData(
                 new[] { ResourceManagerRuntimeData.kCatalogAddress },
                     loadPath,
                     typeof(ContentCatalogProvider),
                     typeof(ContentCatalogData),
                     dependencyHashes);
 
-				//We need to set the data here because this location data gets used later if we decide to load the remote/cached catalog instead.  See DetermineIdToLoad(...)
-				localCatalog.Data = new ProviderLoadRequestOptions() { IgnoreFailures = true };
+                //We need to set the data here because this location data gets used later if we decide to load the remote/cached catalog instead.  See DetermineIdToLoad(...)
+                localCatalog.Data = new ProviderLoadRequestOptions() { IgnoreFailures = true };
 
-				aaContext.runtimeData.CatalogLocations.Add(localCatalog);
+                aaContext.runtimeData.CatalogLocations.Add(localCatalog);
             }
 
             return true;
