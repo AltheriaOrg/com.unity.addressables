@@ -8,6 +8,10 @@ using UnityEditor.AddressableAssets.Settings.GroupSchemas;
 using UnityEngine;
 using UnityEngine.AddressableAssets.ResourceLocators;
 using UnityEngine.ResourceManagement.ResourceProviders;
+#if DEBUG_MULTICATALOG
+using System.Diagnostics;
+using Debug = UnityEngine.Debug;
+#endif
 
 namespace UnityEditor.AddressableAssets.Build.DataBuilders
 {
@@ -46,11 +50,42 @@ namespace UnityEditor.AddressableAssets.Build.DataBuilders
         /// </summary>
         public static HashSet<string> CatalogBuildFilter { get; set; }
 
+        /// <summary>
+        /// Groups belonging to ANY external catalog (selected or not).
+        /// Built lazily on first ProcessGroup call per build.
+        /// </summary>
+        private HashSet<AddressableAssetGroup> m_AllCatalogGroups;
+
+        /// <summary>
+        /// Groups belonging to at least one selected catalog.
+        /// Built lazily on first ProcessGroup call per build.
+        /// </summary>
+        private HashSet<AddressableAssetGroup> m_SelectedCatalogGroups;
+
         private static bool ShouldBuildCatalog(ExternalCatalogSetup catalog)
         {
             if (CatalogBuildFilter == null || CatalogBuildFilter.Count == 0)
                 return true;
             return CatalogBuildFilter.Contains(catalog.name);
+        }
+
+        private void BuildGroupFilterSets()
+        {
+            m_AllCatalogGroups = new HashSet<AddressableAssetGroup>();
+            m_SelectedCatalogGroups = new HashSet<AddressableAssetGroup>();
+
+            foreach (var catalog in externalCatalogs)
+            {
+                if (catalog == null) continue;
+                bool isSelected = ShouldBuildCatalog(catalog);
+                foreach (var group in catalog.AssetGroups)
+                {
+                    if (group == null) continue;
+                    m_AllCatalogGroups.Add(group);
+                    if (isSelected)
+                        m_SelectedCatalogGroups.Add(group);
+                }
+            }
         }
 
         public override string Name
@@ -64,8 +99,45 @@ namespace UnityEditor.AddressableAssets.Build.DataBuilders
             set => externalCatalogs = value;
         }
 
+        protected override string ProcessGroup(AddressableAssetGroup assetGroup, AddressableAssetsBuildContext aaContext)
+        {
+            // When filter is active, skip groups from unselected catalogs
+            if (CatalogBuildFilter != null && CatalogBuildFilter.Count > 0)
+            {
+                // Build lookup sets on first call
+                if (m_AllCatalogGroups == null)
+                    BuildGroupFilterSets();
+
+                bool isInAnyCatalog = m_AllCatalogGroups.Contains(assetGroup);
+                bool isInSelectedCatalog = m_SelectedCatalogGroups.Contains(assetGroup);
+
+                // Skip if: group is catalog-specific AND not in a selected catalog
+                if (isInAnyCatalog && !isInSelectedCatalog)
+                {
+#if DEBUG_MULTICATALOG
+                    Debug.Log($"[MultiCatalog] Skipping group '{assetGroup.Name}' (not in selected catalogs)");
+#endif
+                    return string.Empty;
+                }
+
+#if DEBUG_MULTICATALOG
+                Debug.Log($"[MultiCatalog] Including group '{assetGroup.Name}' (inAnyCatalog={isInAnyCatalog}, inSelected={isInSelectedCatalog})");
+#endif
+            }
+
+            return base.ProcessGroup(assetGroup, aaContext);
+        }
+
         protected override List<ContentCatalogBuildInfo> GetContentCatalogs(AddressablesDataBuilderInput builderInput, AddressableAssetsBuildContext aaContext)
         {
+            // Clear cached filter sets so they are rebuilt next build
+            m_AllCatalogGroups = null;
+            m_SelectedCatalogGroups = null;
+
+#if DEBUG_MULTICATALOG
+            var swCatalogs = Stopwatch.StartNew();
+#endif
+
             // cleanup
             catalogSetups.Clear();
 
@@ -116,6 +188,11 @@ namespace UnityEditor.AddressableAssets.Build.DataBuilders
                     catalogs.Add(setup.BuildInfo);
                 }
             }
+
+#if DEBUG_MULTICATALOG
+            swCatalogs.Stop();
+            Debug.Log($"[MultiCatalog] GetContentCatalogs completed in {swCatalogs.ElapsedMilliseconds}ms — {catalogs.Count} catalog(s) produced");
+#endif
 
             return catalogs;
         }
@@ -182,7 +259,14 @@ namespace UnityEditor.AddressableAssets.Build.DataBuilders
 
         protected override TResult DoBuild<TResult>(AddressablesDataBuilderInput builderInput, AddressableAssetsBuildContext aaContext)
         {
+#if DEBUG_MULTICATALOG
+            var swDoBuild = Stopwatch.StartNew();
+#endif
             var result = base.DoBuild<TResult>(builderInput, aaContext);
+#if DEBUG_MULTICATALOG
+            Debug.Log($"[MultiCatalog] base.DoBuild completed in {swDoBuild.ElapsedMilliseconds}ms");
+            var swCopy = Stopwatch.StartNew();
+#endif
             var copiedFiles = new HashSet<string>();
 
             foreach (var setup in catalogSetups)
@@ -226,6 +310,13 @@ namespace UnityEditor.AddressableAssets.Build.DataBuilders
                     File.Delete(file);
                 }
             }
+
+#if DEBUG_MULTICATALOG
+            swCopy.Stop();
+            swDoBuild.Stop();
+            Debug.Log($"[MultiCatalog] Bundle copy completed in {swCopy.ElapsedMilliseconds}ms — {copiedFiles.Count} file(s) moved");
+            Debug.Log($"[MultiCatalog] DoBuild total: {swDoBuild.ElapsedMilliseconds}ms");
+#endif
 
             return result;
         }
