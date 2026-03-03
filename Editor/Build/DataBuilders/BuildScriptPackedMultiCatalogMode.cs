@@ -40,6 +40,19 @@ namespace UnityEditor.AddressableAssets.Build.DataBuilders
 
         private readonly List<CatalogSetup> catalogSetups = new List<CatalogSetup>();
 
+        /// <summary>
+        /// When non-null and non-empty, only catalogs whose ExternalCatalogSetup asset name
+        /// is contained in this set will be built. When null or empty, all catalogs are built.
+        /// </summary>
+        public static HashSet<string> CatalogBuildFilter { get; set; }
+
+        private static bool ShouldBuildCatalog(ExternalCatalogSetup catalog)
+        {
+            if (CatalogBuildFilter == null || CatalogBuildFilter.Count == 0)
+                return true;
+            return CatalogBuildFilter.Contains(catalog.name);
+        }
+
         public override string Name
         {
             get => base.Name + " - Multi-Catalog";
@@ -61,7 +74,7 @@ namespace UnityEditor.AddressableAssets.Build.DataBuilders
             defaultCatalog.Locations.Clear(); // This will get filled up again below, but filtered by external catalog setups.
             foreach (ExternalCatalogSetup catalogContentGroup in externalCatalogs)
             {
-                if (catalogContentGroup != null)
+                if (catalogContentGroup != null && ShouldBuildCatalog(catalogContentGroup))
                 {
                     catalogSetups.Add(new CatalogSetup(catalogContentGroup, builderInput, aaContext));
                 }
@@ -235,6 +248,9 @@ namespace UnityEditor.AddressableAssets.Build.DataBuilders
 
             foreach (ExternalCatalogSetup externalCatalog in externalCatalogs)
             {
+                if (!ShouldBuildCatalog(externalCatalog))
+                    continue;
+
                 string buildPath = externalCatalog.BuildPath.GetValue(profileSettings, profileId);
                 if (string.IsNullOrEmpty(buildPath))
                 {
